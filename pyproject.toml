@@ -43,6 +43,9 @@ aas-lancedb-mcp = "lancedb_mcp.__main__:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/lancedb_mcp"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
