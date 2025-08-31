@@ -108,4 +108,5 @@ skips = ["B101", "B601"]  # Skip assert_used and shell injection for our use cas
 dev = [
     "pytest-asyncio>=1.1.0",
     "pytest-cov>=6.2.1",
+    "ruff>=0.12.11",
 ]

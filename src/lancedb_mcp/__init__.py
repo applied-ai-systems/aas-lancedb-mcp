@@ -4,20 +4,24 @@ __version__ = "0.1.0"
 
 from .server import server, run, set_db_uri
 from .models import (
-    VectorData, TextData, SearchQuery, TableConfig, 
-    DatastoreInfo, EmbeddingConfig
+    VectorData,
+    TextData,
+    SearchQuery,
+    TableConfig,
+    DatastoreInfo,
+    EmbeddingConfig,
 )
 from .embedding import embedding_manager
 
 __all__ = [
     "server",
-    "run", 
+    "run",
     "set_db_uri",
     "VectorData",
-    "TextData", 
+    "TextData",
     "SearchQuery",
     "TableConfig",
     "DatastoreInfo",
     "EmbeddingConfig",
-    "embedding_manager"
+    "embedding_manager",
 ]

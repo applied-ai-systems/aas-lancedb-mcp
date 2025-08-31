@@ -50,7 +50,7 @@ def test_search_query():
     query = SearchQuery(text="search term")
     assert query.text == "search term"
     assert query.limit == 10
-    
+
     query2 = SearchQuery(vector=[1.0, 2.0, 3.0])
     assert query2.vector == [1.0, 2.0, 3.0]
 
@@ -61,7 +61,7 @@ def test_datastore_info():
         name="test_table",
         row_count=100,
         table_schema={"fields": [{"name": "vector", "type": "list"}]},
-        dimension=384
+        dimension=384,
     )
     assert info.name == "test_table"
     assert info.row_count == 100
@@ -87,9 +87,9 @@ def test_model_validation():
     # Test validation errors
     with pytest.raises(ValueError):
         TableConfig(name="")  # empty name should fail
-        
+
     with pytest.raises(ValueError):
         TableConfig(name="test", dimension=0)  # zero dimension should fail
-    
+
     with pytest.raises(ValueError):
         TextData(text="")  # empty text should fail
