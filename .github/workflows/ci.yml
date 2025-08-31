@@ -151,7 +151,7 @@ jobs:
 
       - name: Install package from wheel
         run: |
-          uv pip install dist/*.whl
+          uv pip install --system dist/*.whl
 
       - name: Test CLI entry point
         run: |
