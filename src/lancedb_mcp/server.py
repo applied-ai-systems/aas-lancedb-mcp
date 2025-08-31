@@ -67,6 +67,602 @@ def get_embedding_config(model_name: str | None = None) -> EmbeddingConfig:
 server = Server("aas-lancedb-server")
 
 
+@server.list_resources()
+async def handle_list_resources() -> list[types.Resource]:
+    """List available resources (table schemas, data samples, statistics)."""
+    try:
+        db = get_db()
+        resources = []
+
+        # Add overview resource
+        resources.append(
+            types.Resource(
+                uri="lancedb://overview",
+                name="Database Overview",
+                description="Overview of all tables and database statistics",
+                mimeType="application/json",
+            )
+        )
+
+        # Add resources for each table
+        for table_name in db.table_names():
+            # Table schema resource
+            resources.append(
+                types.Resource(
+                    uri=f"lancedb://tables/{table_name}/schema",
+                    name=f"{table_name} Schema",
+                    description=f"Schema definition for table {table_name}",
+                    mimeType="application/json",
+                )
+            )
+
+            # Table sample data resource
+            resources.append(
+                types.Resource(
+                    uri=f"lancedb://tables/{table_name}/sample",
+                    name=f"{table_name} Sample Data",
+                    description=f"Sample data from table {table_name}",
+                    mimeType="application/json",
+                )
+            )
+
+            # Table statistics resource
+            resources.append(
+                types.Resource(
+                    uri=f"lancedb://tables/{table_name}/stats",
+                    name=f"{table_name} Statistics",
+                    description=f"Statistics and metadata for table {table_name}",
+                    mimeType="application/json",
+                )
+            )
+
+        return resources
+    except Exception as e:
+        logger.error(f"Failed to list resources: {e}")
+        return []
+
+
+@server.read_resource()
+async def handle_read_resource(uri: str) -> str:
+    """Read resource contents based on URI."""
+    try:
+        db = get_db()
+
+        if uri == "lancedb://overview":
+            # Database overview
+            tables = []
+            total_rows = 0
+
+            for table_name in db.table_names():
+                try:
+                    table = db.open_table(table_name)
+                    row_count = max(0, table.count_rows() - 1)  # Subtract metadata row
+                    total_rows += row_count
+
+                    # Get metadata if available
+                    metadata = await _get_table_metadata(table)
+                    schema_info = {}
+                    if metadata:
+                        schema = TableSchema.model_validate(metadata["schema"])
+                        schema_info = {
+                            "columns": len(schema.columns),
+                            "searchable_columns": len(get_searchable_columns(schema)),
+                            "embedding_model": schema.embedding_model,
+                        }
+
+                    tables.append(
+                        {"name": table_name, "rows": row_count, **schema_info}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to get info for table {table_name}: {e}")
+                    tables.append({"name": table_name, "error": str(e)})
+
+            overview = {
+                "database_uri": DB_URI,
+                "total_tables": len(tables),
+                "total_rows": total_rows,
+                "default_embedding_model": DEFAULT_EMBEDDING_MODEL,
+                "tables": tables,
+                "generated_at": datetime.now().isoformat(),
+            }
+            return json.dumps(overview, indent=2)
+
+        elif uri.startswith("lancedb://tables/"):
+            # Parse table name and resource type
+            parts = uri.replace("lancedb://tables/", "").split("/")
+            if len(parts) != 2:
+                raise ValueError(f"Invalid table resource URI: {uri}")
+
+            table_name, resource_type = parts
+
+            if table_name not in db.table_names():
+                raise ValueError(f"Table '{table_name}' does not exist")
+
+            table = db.open_table(table_name)
+
+            if resource_type == "schema":
+                # Table schema
+                metadata = await _get_table_metadata(table)
+                if metadata:
+                    schema = metadata["schema"]
+                    return json.dumps(
+                        {
+                            "table_name": table_name,
+                            "schema": schema,
+                            "searchable_columns": metadata.get(
+                                "searchable_columns", []
+                            ),
+                            "embedding_model": metadata.get(
+                                "embedding_model", DEFAULT_EMBEDDING_MODEL
+                            ),
+                            "created_at": metadata.get("created_at"),
+                            "generated_at": datetime.now().isoformat(),
+                        },
+                        indent=2,
+                    )
+                else:
+                    return json.dumps(
+                        {
+                            "table_name": table_name,
+                            "error": "No schema metadata found - table may have been created with older version",
+                            "generated_at": datetime.now().isoformat(),
+                        },
+                        indent=2,
+                    )
+
+            elif resource_type == "sample":
+                # Sample data
+                df = table.to_pandas()
+                user_data = (
+                    df[df["table_metadata"].isna()]
+                    if "table_metadata" in df.columns
+                    else df
+                )
+
+                # Get up to 5 sample rows, excluding vector columns for readability
+                sample_df = user_data.head(5)
+                display_cols = [
+                    col
+                    for col in sample_df.columns
+                    if not col.endswith("_vector") and col != "table_metadata"
+                ]
+                sample_df = sample_df[display_cols]
+
+                sample = {
+                    "table_name": table_name,
+                    "sample_size": len(sample_df),
+                    "total_rows": len(user_data),
+                    "columns": display_cols,
+                    "data": sample_df.to_dict(orient="records"),
+                    "generated_at": datetime.now().isoformat(),
+                }
+                return json.dumps(sample, indent=2)
+
+            elif resource_type == "stats":
+                # Table statistics
+                df = table.to_pandas()
+                user_data = (
+                    df[df["table_metadata"].isna()]
+                    if "table_metadata" in df.columns
+                    else df
+                )
+
+                # Calculate basic statistics
+                stats = {
+                    "table_name": table_name,
+                    "total_rows": len(user_data),
+                    "total_columns": len(df.columns),
+                    "column_info": {},
+                    "generated_at": datetime.now().isoformat(),
+                }
+
+                # Per-column statistics
+                for col in df.columns:
+                    if col not in ["table_metadata"] and not col.endswith("_vector"):
+                        col_data = (
+                            user_data[col] if col in user_data.columns else pd.Series()
+                        )
+                        stats["column_info"][col] = {
+                            "type": str(col_data.dtype)
+                            if not col_data.empty
+                            else "unknown",
+                            "non_null_count": int(col_data.count())
+                            if not col_data.empty
+                            else 0,
+                            "null_count": int(col_data.isnull().sum())
+                            if not col_data.empty
+                            else 0,
+                        }
+
+                        # Add unique values for small datasets
+                        if not col_data.empty and len(col_data.dropna()) <= 20:
+                            unique_vals = col_data.dropna().unique().tolist()
+                            # Convert numpy types to native Python types for JSON serialization
+                            stats["column_info"][col]["unique_values"] = [
+                                val.item() if hasattr(val, "item") else val
+                                for val in unique_vals
+                            ]
+
+                return json.dumps(stats, indent=2)
+            else:
+                raise ValueError(f"Unknown resource type: {resource_type}")
+        else:
+            raise ValueError(f"Unknown resource URI: {uri}")
+
+    except Exception as e:
+        error_response = {
+            "error": f"Failed to read resource {uri}: {str(e)}",
+            "generated_at": datetime.now().isoformat(),
+        }
+        return json.dumps(error_response, indent=2)
+
+
+@server.list_prompts()
+async def handle_list_prompts() -> list[types.Prompt]:
+    """List available prompts for database operations."""
+    return [
+        types.Prompt(
+            name="analyze_table",
+            description="Generate analysis questions and insights for a database table",
+            arguments=[
+                types.PromptArgument(
+                    name="table_name",
+                    description="Name of the table to analyze",
+                    required=True,
+                ),
+                types.PromptArgument(
+                    name="focus_area",
+                    description="Specific area to focus on (e.g., 'data_quality', 'patterns', 'relationships')",
+                    required=False,
+                ),
+            ],
+        ),
+        types.Prompt(
+            name="design_schema",
+            description="Help design a table schema based on use case requirements",
+            arguments=[
+                types.PromptArgument(
+                    name="use_case",
+                    description="Description of the intended use case for the table",
+                    required=True,
+                ),
+                types.PromptArgument(
+                    name="data_types",
+                    description="Expected data types and examples",
+                    required=False,
+                ),
+                types.PromptArgument(
+                    name="search_requirements",
+                    description="Text search and semantic search requirements",
+                    required=False,
+                ),
+            ],
+        ),
+        types.Prompt(
+            name="optimize_queries",
+            description="Suggest query optimizations and indexing strategies",
+            arguments=[
+                types.PromptArgument(
+                    name="table_name",
+                    description="Name of the table to optimize",
+                    required=True,
+                ),
+                types.PromptArgument(
+                    name="query_patterns",
+                    description="Common query patterns and use cases",
+                    required=False,
+                ),
+            ],
+        ),
+        types.Prompt(
+            name="troubleshoot_performance",
+            description="Diagnose and resolve database performance issues",
+            arguments=[
+                types.PromptArgument(
+                    name="symptoms",
+                    description="Description of performance issues observed",
+                    required=True,
+                ),
+                types.PromptArgument(
+                    name="table_names",
+                    description="Affected tables (comma-separated)",
+                    required=False,
+                ),
+            ],
+        ),
+        types.Prompt(
+            name="migration_planning",
+            description="Plan safe table schema migrations and data transformations",
+            arguments=[
+                types.PromptArgument(
+                    name="source_table",
+                    description="Name of the table to migrate",
+                    required=True,
+                ),
+                types.PromptArgument(
+                    name="desired_changes",
+                    description="Desired schema changes and transformations",
+                    required=True,
+                ),
+                types.PromptArgument(
+                    name="constraints",
+                    description="Migration constraints (downtime, data safety, etc.)",
+                    required=False,
+                ),
+            ],
+        ),
+    ]
+
+
+@server.get_prompt()
+async def handle_get_prompt(
+    name: str, arguments: dict[str, str] | None
+) -> types.GetPromptResult:
+    """Generate prompt content based on name and arguments."""
+    try:
+        db = get_db()
+        args = arguments or {}
+
+        if name == "analyze_table":
+            table_name = args.get("table_name", "")
+            focus_area = args.get("focus_area", "general insights")
+
+            if not table_name:
+                raise ValueError("table_name is required")
+
+            if table_name not in db.table_names():
+                raise ValueError(f"Table '{table_name}' does not exist")
+
+            # Get table information for context
+            table_info = await _get_table_context(db, table_name)
+
+            messages = [
+                types.PromptMessage(
+                    role="user",
+                    content=types.TextContent(
+                        type="text",
+                        text=f"""Analyze the database table '{table_name}' with focus on {focus_area}.
+
+Table Information:
+{table_info}
+
+Please provide:
+1. Key insights about the data patterns and distribution
+2. Data quality assessment
+3. Potential issues or anomalies to investigate
+4. Recommendations for optimization or improvements
+5. Suggested queries for deeper analysis
+
+Focus your analysis on: {focus_area}""",
+                    ),
+                )
+            ]
+
+        elif name == "design_schema":
+            use_case = args.get("use_case", "")
+            data_types = args.get("data_types", "not specified")
+            search_requirements = args.get(
+                "search_requirements", "basic search capabilities"
+            )
+
+            if not use_case:
+                raise ValueError("use_case is required")
+
+            messages = [
+                types.PromptMessage(
+                    role="user",
+                    content=types.TextContent(
+                        type="text",
+                        text=f"""Help me design a table schema for this use case:
+
+Use Case: {use_case}
+
+Data Types Expected: {data_types}
+Search Requirements: {search_requirements}
+
+Please provide:
+1. Recommended table schema with column definitions
+2. Which columns should be searchable via embeddings
+3. Appropriate data types and constraints
+4. Embedding model recommendations
+5. Example data structure
+6. Potential scaling considerations
+
+Current system supports:
+- Text, integer, float, boolean, and JSON column types
+- Automatic embedding generation for searchable text columns
+- BGE-M3 multilingual embeddings (1024 dimensions)
+- Safe schema migrations with validation""",
+                    ),
+                )
+            ]
+
+        elif name == "optimize_queries":
+            table_name = args.get("table_name", "")
+            query_patterns = args.get("query_patterns", "not specified")
+
+            if not table_name:
+                raise ValueError("table_name is required")
+
+            if table_name not in db.table_names():
+                raise ValueError(f"Table '{table_name}' does not exist")
+
+            table_info = await _get_table_context(db, table_name)
+
+            messages = [
+                types.PromptMessage(
+                    role="user",
+                    content=types.TextContent(
+                        type="text",
+                        text=f"""Optimize queries and performance for table '{table_name}'.
+
+Table Information:
+{table_info}
+
+Common Query Patterns: {query_patterns}
+
+Please provide:
+1. Query optimization strategies for common patterns
+2. Indexing recommendations (if applicable)
+3. Embedding search optimization tips
+4. Data organization suggestions
+5. Performance monitoring approaches
+6. Specific query examples with improvements
+
+Consider the LanceDB/vector database characteristics and BGE-M3 embeddings.""",
+                    ),
+                )
+            ]
+
+        elif name == "troubleshoot_performance":
+            symptoms = args.get("symptoms", "")
+            table_names = args.get("table_names", "")
+
+            if not symptoms:
+                raise ValueError("symptoms is required")
+
+            # Get database overview for context
+            overview_resource = await handle_read_resource("lancedb://overview")
+
+            context_info = "Database Overview:\n" + overview_resource
+
+            if table_names:
+                table_list = [t.strip() for t in table_names.split(",")]
+                for table_name in table_list:
+                    if table_name in db.table_names():
+                        table_info = await _get_table_context(db, table_name)
+                        context_info += f"\n\nTable {table_name}:\n{table_info}"
+
+            messages = [
+                types.PromptMessage(
+                    role="user",
+                    content=types.TextContent(
+                        type="text",
+                        text=f"""Troubleshoot performance issues in the LanceDB database.
+
+Symptoms: {symptoms}
+
+Affected Tables: {table_names if table_names else "not specified"}
+
+Context:
+{context_info}
+
+Please provide:
+1. Likely root causes based on symptoms
+2. Diagnostic steps to confirm the issues
+3. Specific remediation recommendations
+4. Prevention strategies for the future
+5. Performance monitoring suggestions
+6. When to consider schema migrations or optimizations
+
+Consider LanceDB-specific performance characteristics, embedding operations, and vector search patterns.""",
+                    ),
+                )
+            ]
+
+        elif name == "migration_planning":
+            source_table = args.get("source_table", "")
+            desired_changes = args.get("desired_changes", "")
+            constraints = args.get(
+                "constraints", "minimize downtime, ensure data safety"
+            )
+
+            if not source_table or not desired_changes:
+                raise ValueError("source_table and desired_changes are required")
+
+            if source_table not in db.table_names():
+                raise ValueError(f"Table '{source_table}' does not exist")
+
+            table_info = await _get_table_context(db, source_table)
+
+            messages = [
+                types.PromptMessage(
+                    role="user",
+                    content=types.TextContent(
+                        type="text",
+                        text=f"""Plan a safe migration for table '{source_table}'.
+
+Current Table Information:
+{table_info}
+
+Desired Changes: {desired_changes}
+
+Constraints: {constraints}
+
+Please provide:
+1. Step-by-step migration plan
+2. Risk assessment and mitigation strategies
+3. Backup and rollback procedures
+4. Data validation approaches
+5. Testing recommendations
+6. Timeline estimates
+7. Impact on existing applications
+
+Consider the built-in migration tools available:
+- Safe table migration with automatic backup
+- Schema validation before migration
+- Column mapping and data transformation
+- Embedding regeneration for searchable columns""",
+                    ),
+                )
+            ]
+
+        else:
+            raise ValueError(f"Unknown prompt: {name}")
+
+        return types.GetPromptResult(
+            description=f"Generated {name} prompt", messages=messages
+        )
+
+    except Exception as e:
+        # Return error as a prompt message
+        messages = [
+            types.PromptMessage(
+                role="user",
+                content=types.TextContent(
+                    type="text", text=f"Error generating prompt '{name}': {str(e)}"
+                ),
+            )
+        ]
+        return types.GetPromptResult(
+            description=f"Error in {name} prompt", messages=messages
+        )
+
+
+async def _get_table_context(db, table_name: str) -> str:
+    """Get formatted context information about a table for prompts."""
+    try:
+        # Get schema info
+        schema_resource = await handle_read_resource(
+            f"lancedb://tables/{table_name}/schema"
+        )
+        schema_data = json.loads(schema_resource)
+
+        # Get sample data
+        sample_resource = await handle_read_resource(
+            f"lancedb://tables/{table_name}/sample"
+        )
+        sample_data = json.loads(sample_resource)
+
+        # Get statistics
+        stats_resource = await handle_read_resource(
+            f"lancedb://tables/{table_name}/stats"
+        )
+        stats_data = json.loads(stats_resource)
+
+        context = f"""Schema: {json.dumps(schema_data.get("schema", {}), indent=2)}
+Sample Data ({sample_data.get("sample_size", 0)} rows): {json.dumps(sample_data.get("data", []), indent=2)}
+Statistics: {json.dumps(stats_data.get("column_info", {}), indent=2)}
+Total Rows: {stats_data.get("total_rows", 0)}
+Searchable Columns: {schema_data.get("searchable_columns", [])}
+Embedding Model: {schema_data.get("embedding_model", "unknown")}"""
+
+        return context
+
+    except Exception as e:
+        return f"Error retrieving context for table {table_name}: {str(e)}"
+
+
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """List available database-like tools."""
