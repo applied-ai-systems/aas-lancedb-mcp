@@ -63,7 +63,7 @@ jobs:
             --junit-xml=pytest-results.xml
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: coverage.xml
           flags: python-${{ matrix.python-version }}
