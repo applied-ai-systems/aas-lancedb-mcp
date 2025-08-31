@@ -163,7 +163,7 @@ jobs:
           uv run python -c "
           try:
               from lancedb_mcp import server, embedding_manager
-              from lancedb_mcp.models import TableConfig, VectorData
+              from lancedb_mcp.models import TableSchema, ColumnSchema
               print('✓ All imports successful')
           except ImportError as e:
               print(f'✗ Import failed: {e}')

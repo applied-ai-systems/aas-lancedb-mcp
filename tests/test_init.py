@@ -1,14 +1,16 @@
 """Tests for __init__.py functionality."""
 
 from lancedb_mcp import __version__
-from lancedb_mcp.models import TableConfig
+from lancedb_mcp.models import ColumnSchema, TableSchema
 
 
-def test_config():
-    """Test TableConfig model."""
-    config = TableConfig(name="test_table")
-    assert config.name == "test_table"
-    assert isinstance(config.dimension, int)
+def test_schema():
+    """Test TableSchema model."""
+    column = ColumnSchema(name="title", type="text", searchable=True)
+    schema = TableSchema(name="test_table", columns=[column])
+    assert schema.name == "test_table"
+    assert len(schema.columns) == 1
+    assert schema.columns[0].searchable is True
 
 
 def test_version():
