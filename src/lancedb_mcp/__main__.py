@@ -1,12 +1,13 @@
 """Main entry point for AAS LanceDB MCP server."""
 
-import sys
 import asyncio
+import sys
+
 from .server import run
 
 
 def main():
-    """Main entry point."""
+    """Run the AAS LanceDB MCP server."""
     try:
         asyncio.run(run())
     except KeyboardInterrupt:

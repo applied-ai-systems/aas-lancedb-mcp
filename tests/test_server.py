@@ -5,10 +5,11 @@ import tempfile
 
 import numpy as np
 import pytest
-from lancedb_mcp.models import SearchQuery, TableConfig, create_vector_data_model
-from lancedb_mcp.server import set_db_uri
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+from lancedb_mcp.models import SearchQuery, TableConfig, create_vector_data_model
+from lancedb_mcp.server import set_db_uri
 
 
 @pytest.fixture

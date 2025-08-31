@@ -1,11 +1,11 @@
 """Enhanced AAS LanceDB MCP server with sentence transformers integration."""
 
+import json
 import logging
 import os
 import pathlib
 from datetime import datetime
-from typing import Any, List, Dict, Optional
-import json
+from typing import Any
 
 import lancedb
 import mcp.server.stdio
@@ -15,16 +15,16 @@ from lancedb.pydantic import pydantic_to_schema
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
+from .embedding import embedding_manager
 from .models import (
-    SearchQuery,
-    TableConfig,
-    VectorData,
-    TextData,
     DatastoreInfo,
     EmbeddingConfig,
+    SearchQuery,
+    TableConfig,
+    TextData,
+    VectorData,
     create_vector_data_model,
 )
-from .embedding import embedding_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -52,7 +52,7 @@ def get_db() -> lancedb.DBConnection:
         raise err
 
 
-def get_embedding_config(model_name: Optional[str] = None) -> EmbeddingConfig:
+def get_embedding_config(model_name: str | None = None) -> EmbeddingConfig:
     """Get embedding configuration."""
     return EmbeddingConfig(
         model_name=model_name or DEFAULT_EMBEDDING_MODEL,
@@ -70,7 +70,7 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="create_table",
-            description="Create a new vector table with optional embedding model configuration",
+            description="Create a new vector table with optional embedding config",
             arguments=[
                 types.ToolArgument(
                     name="config",
@@ -109,7 +109,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="search_semantic",
-            description="Perform semantic search using text query with automatic embedding",
+            description="Perform semantic search using text query with auto embedding",
             arguments=[
                 types.ToolArgument(
                     name="table_name", description="Name of the table", type="string"
@@ -525,7 +525,7 @@ async def handle_call_tool(
         else:
             raise ValueError(f"Unknown tool: {name}")
 
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         error_msg = f"Table {arguments.get('table_name', 'unknown')} not found"
         logger.error(error_msg)
         return [types.TextContent(type="text", text=f"Error: {error_msg}")]

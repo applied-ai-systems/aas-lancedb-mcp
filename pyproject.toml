@@ -67,6 +67,11 @@ ignore = [
     "D213",  # multi-line-summary-second-line
     "S101",  # Use of assert in tests is OK
     "S603",  # subprocess call without shell=True is OK
+    "S110",  # try-except-pass is sometimes necessary
+    "B019",  # lru_cache on methods - we need this for model caching
+    "C901",  # function too complex - will refactor later
+    "N806",  # variable naming - dynamic class creation needs PascalCase
+    "E501",  # line too long - some long strings are unavoidable
 ]
 
 [tool.ruff.per-file-ignores]

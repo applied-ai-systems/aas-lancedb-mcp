@@ -1,6 +1,7 @@
 """Test configuration."""
 
 import os
+
 import pytest
 
 # Set environment variables for testing

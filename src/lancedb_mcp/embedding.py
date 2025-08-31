@@ -1,10 +1,11 @@
 """Sentence transformers embedding integration for AAS LanceDB MCP."""
 
 import logging
-from typing import List, Optional, Dict, Any
+from functools import lru_cache
+from typing import Any
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from functools import lru_cache
 
 from .models import EmbeddingConfig
 
@@ -15,8 +16,9 @@ class EmbeddingManager:
     """Manages sentence transformer models and embedding generation."""
 
     def __init__(self):
-        self._models: Dict[str, SentenceTransformer] = {}
-        self._configs: Dict[str, EmbeddingConfig] = {}
+        """Initialize the embedding manager."""
+        self._models: dict[str, SentenceTransformer] = {}
+        self._configs: dict[str, EmbeddingConfig] = {}
 
     @lru_cache(maxsize=5)
     def _load_model(self, model_name: str, device: str = "cpu") -> SentenceTransformer:
@@ -40,17 +42,17 @@ class EmbeddingManager:
         return self._models[cache_key]
 
     def embed_text(
-        self, text: str, config: EmbeddingConfig, normalize: Optional[bool] = None
-    ) -> List[float]:
+        self, text: str, config: EmbeddingConfig, normalize: bool | None = None
+    ) -> list[float]:
         """Generate embedding for a single text."""
         return self.embed_texts([text], config, normalize)[0]
 
     def embed_texts(
         self,
-        texts: List[str],
+        texts: list[str],
         config: EmbeddingConfig,
-        normalize: Optional[bool] = None,
-    ) -> List[List[float]]:
+        normalize: bool | None = None,
+    ) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
         if not texts:
             return []
@@ -84,7 +86,7 @@ class EmbeddingManager:
             logger.error(f"Failed to generate embeddings: {e}")
             raise
 
-    def get_model_info(self, model_name: str) -> Dict[str, Any]:
+    def get_model_info(self, model_name: str) -> dict[str, Any]:
         """Get information about a model."""
         try:
             # Create temporary config to load model

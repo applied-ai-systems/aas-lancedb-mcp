@@ -1,13 +1,14 @@
 """Test model functionality without LanceDB dependencies."""
 
 import pytest
+
 from lancedb_mcp.models import (
-    EmbeddingConfig,
-    TableConfig,
-    VectorDataBase,
-    TextData,
-    SearchQuery,
     DatastoreInfo,
+    EmbeddingConfig,
+    SearchQuery,
+    TableConfig,
+    TextData,
+    VectorDataBase,
     create_vector_data_model,
 )
 
