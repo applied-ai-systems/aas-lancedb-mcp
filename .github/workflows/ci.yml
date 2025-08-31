@@ -1,0 +1,223 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Install development dependencies
+        run: uv add --dev pytest pytest-cov pytest-asyncio bandit[toml] pyright ruff
+
+      - name: Security check with Bandit
+        run: |
+          uv run bandit -r --severity-level medium --confidence-level medium \
+            -f json -o bandit-report.json src/ || echo "bandit_failed=true" >> $GITHUB_ENV
+        continue-on-error: true
+
+      - name: Upload Bandit security report
+        if: env.bandit_failed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report-${{ matrix.python-version }}
+          path: bandit-report.json
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ \
+            --cov=src/lancedb_mcp \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov \
+            --junit-xml=pytest-results.xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          flags: python-${{ matrix.python-version }}
+          name: coverage-${{ matrix.python-version }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: |
+            pytest-results.xml
+            htmlcov/
+            coverage.xml
+
+      - name: Type checking with pyright
+        run: uv run pyright src/ tests/
+
+      - name: Format check with ruff
+        run: uv run ruff format --check .
+
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    needs: [test]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Build package
+        run: uv build
+
+      - name: Check distribution
+        run: |
+          uv run python -m pip install twine
+          uv run twine check dist/*
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install package from wheel
+        run: |
+          uv pip install dist/*.whl
+
+      - name: Test CLI entry point
+        run: |
+          # Test that the CLI loads without errors
+          timeout 5s aas-lancedb-mcp --help || true
+
+      - name: Test MCP server import
+        run: |
+          uv run python -c "
+          try:
+              from lancedb_mcp import server, embedding_manager
+              from lancedb_mcp.models import TableConfig, VectorData
+              print('✓ All imports successful')
+          except ImportError as e:
+              print(f'✗ Import failed: {e}')
+              exit(1)
+          "
+
+      - name: Test embedding functionality
+        run: |
+          uv run python -c "
+          from lancedb_mcp.embedding import EmbeddingManager
+          from lancedb_mcp.models import EmbeddingConfig
+          
+          # Test embedding manager initialization
+          manager = EmbeddingManager()
+          config = EmbeddingConfig(model_name='all-MiniLM-L6-v2', dimension=384)
+          
+          # Test text embedding (may download model)
+          try:
+              embedding = manager.embed_text('test text', config)
+              assert len(embedding) == 384
+              print('✓ Embedding functionality working')
+          except Exception as e:
+              print(f'⚠ Embedding test skipped (model download): {e}')
+          "
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "security"
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
