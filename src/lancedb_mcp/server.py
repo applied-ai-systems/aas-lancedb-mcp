@@ -17,7 +17,7 @@ from mcp.server.models import InitializationOptions
 
 from .models import (
     SearchQuery, TableConfig, VectorData, TextData, 
-    DatastoreInfo, EmbeddingConfig
+    DatastoreInfo, EmbeddingConfig, create_vector_data_model
 )
 from .embedding import embedding_manager
 
@@ -192,9 +192,7 @@ async def handle_call_tool(
             config = TableConfig.model_validate(arguments["config"])
             
             # Create VectorData schema with proper dimension
-            class DynamicVectorData(VectorData):
-                vector: lancedb.pydantic.Vector = lancedb.pydantic.Field(..., dim=config.dimension)
-            
+            DynamicVectorData = create_vector_data_model(config.dimension)
             schema = pydantic_to_schema(DynamicVectorData)
             
             # Store table metadata
@@ -447,7 +445,7 @@ async def handle_call_tool(
             info = DatastoreInfo(
                 name=table_name,
                 row_count=row_count,
-                schema={"fields": [{"name": f.name, "type": str(f.type)} for f in schema]},
+                table_schema={"fields": [{"name": f.name, "type": str(f.type)} for f in schema]},
                 dimension=metadata.get("dimension", "unknown"),
                 embedding_model=metadata.get("embedding_model"),
                 created_at=metadata.get("created_at"),

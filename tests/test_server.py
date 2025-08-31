@@ -5,7 +5,7 @@ import tempfile
 
 import numpy as np
 import pytest
-from lancedb_mcp.models import SearchQuery, TableConfig, VectorData
+from lancedb_mcp.models import SearchQuery, TableConfig, create_vector_data_model
 from lancedb_mcp.server import set_db_uri
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -44,7 +44,7 @@ async def test_create_table(client):
     """Test creating a table."""
     config = TableConfig(name="test_table", dimension=512)
     tools = await client.list_tools()
-    assert len(tools) == 3
+    assert len(tools) == 9  # We have 9 tools in our server
     result = await client.call_tool("create_table", {"config": config.model_dump()})
     assert "Table created successfully" in result[0].text
 
@@ -58,6 +58,7 @@ async def test_add_vector(client):
 
     # Add test vector
     vector = np.random.rand(512).tolist()
+    VectorData = create_vector_data_model(512)
     data = VectorData(vector=vector, text="test vector")
     result = await client.call_tool(
         "add_vector", {"table_name": "test_table", "data": data.model_dump()}
@@ -74,6 +75,7 @@ async def test_search_vectors(client):
 
     # Add test vector
     vector = np.random.rand(512).tolist()
+    VectorData = create_vector_data_model(512)
     data = VectorData(vector=vector, text="test vector")
     await client.call_tool(
         "add_vector", {"table_name": "test_table", "data": data.model_dump()}

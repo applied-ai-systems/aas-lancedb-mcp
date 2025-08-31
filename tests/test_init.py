@@ -1,7 +1,8 @@
 """Tests for __init__.py functionality."""
 
 
-from lancedb_mcp import TableConfig, __version__
+from lancedb_mcp.models import TableConfig
+from lancedb_mcp import __version__
 
 
 def test_config():
