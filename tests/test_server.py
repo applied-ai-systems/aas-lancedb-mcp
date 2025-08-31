@@ -52,7 +52,7 @@ async def test_create_table(client):
     columns = [
         ColumnSchema(name="title", type="text", searchable=True, required=True),
         ColumnSchema(name="price", type="float", required=True),
-        ColumnSchema(name="description", type="text", searchable=True)
+        ColumnSchema(name="description", type="text", searchable=True),
     ]
     schema = TableSchema(name="products", columns=columns)
 
@@ -69,15 +69,14 @@ async def test_insert_data(client):
     # Create table first
     columns = [
         ColumnSchema(name="title", type="text", searchable=True, required=True),
-        ColumnSchema(name="price", type="float", required=True)
+        ColumnSchema(name="price", type="float", required=True),
     ]
     schema = TableSchema(name="products", columns=columns)
     await client.call_tool("create_table", {"schema": schema.model_dump()})
 
     # Insert test data
     insert_data = InsertData(
-        table_name="products",
-        data={"title": "Test Widget", "price": 29.99}
+        table_name="products", data={"title": "Test Widget", "price": 29.99}
     )
     result = await client.call_tool("insert", {"data": insert_data.model_dump()})
     assert "Inserted 1 row into table 'products'" in result[0].text
@@ -89,15 +88,14 @@ async def test_select_data(client):
     # Create table and insert data
     columns = [
         ColumnSchema(name="title", type="text", required=True),
-        ColumnSchema(name="price", type="float", required=True)
+        ColumnSchema(name="price", type="float", required=True),
     ]
     schema = TableSchema(name="products", columns=columns)
     await client.call_tool("create_table", {"schema": schema.model_dump()})
 
     # Insert test data
     insert_data = InsertData(
-        table_name="products",
-        data={"title": "Test Widget", "price": 29.99}
+        table_name="products", data={"title": "Test Widget", "price": 29.99}
     )
     await client.call_tool("insert", {"data": insert_data.model_dump()})
 
@@ -113,7 +111,7 @@ async def test_semantic_search(client):
     # Create table with searchable text
     columns = [
         ColumnSchema(name="title", type="text", searchable=True, required=True),
-        ColumnSchema(name="description", type="text", searchable=True)
+        ColumnSchema(name="description", type="text", searchable=True),
     ]
     schema = TableSchema(name="articles", columns=columns)
     await client.call_tool("create_table", {"schema": schema.model_dump()})
@@ -123,17 +121,13 @@ async def test_semantic_search(client):
         table_name="articles",
         data={
             "title": "Machine Learning Basics",
-            "description": "An introduction to machine learning algorithms"
-        }
+            "description": "An introduction to machine learning algorithms",
+        },
     )
     await client.call_tool("insert", {"data": insert_data.model_dump()})
 
     # Test semantic search
-    search_query = SearchQuery(
-        table_name="articles",
-        query="AI algorithms",
-        limit=5
-    )
+    search_query = SearchQuery(table_name="articles", query="AI algorithms", limit=5)
     result = await client.call_tool("search", {"query": search_query.model_dump()})
     assert "Machine Learning" in result[0].text
 

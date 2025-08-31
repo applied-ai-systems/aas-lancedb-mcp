@@ -178,12 +178,12 @@ jobs:
           
           # Test embedding manager initialization
           manager = EmbeddingManager()
-          config = EmbeddingConfig(model_name='all-MiniLM-L6-v2', dimension=384)
+          config = EmbeddingConfig()  # Use default BGE-M3 configuration
           
           # Test text embedding (may download model)
           try:
               embedding = manager.embed_text('test text', config)
-              assert len(embedding) == 384
+              assert len(embedding) == 1024  # BGE-M3 dimension
               print('✓ Embedding functionality working')
           except Exception as e:
               print(f'⚠ Embedding test skipped (model download): {e}')

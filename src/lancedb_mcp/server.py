@@ -93,9 +93,7 @@ async def handle_list_tools() -> list[types.Tool]:
             description="Get detailed schema and information about a table",
             arguments=[
                 types.ToolArgument(
-                    name="table_name",
-                    description="Name of the table",
-                    type="string"
+                    name="table_name", description="Name of the table", type="string"
                 ),
             ],
         ),
@@ -106,11 +104,10 @@ async def handle_list_tools() -> list[types.Tool]:
                 types.ToolArgument(
                     name="table_name",
                     description="Name of the table to delete",
-                    type="string"
+                    type="string",
                 ),
             ],
         ),
-
         # Data Operations (CRUD)
         types.Tool(
             name="insert",
@@ -150,18 +147,15 @@ async def handle_list_tools() -> list[types.Tool]:
             description="Delete rows from a table based on conditions",
             arguments=[
                 types.ToolArgument(
-                    name="table_name",
-                    description="Name of the table",
-                    type="string"
+                    name="table_name", description="Name of the table", type="string"
                 ),
                 types.ToolArgument(
                     name="where",
                     description="Conditions for deletion (JSON object)",
-                    type="object"
+                    type="object",
                 ),
             ],
         ),
-
         # Semantic Search
         types.Tool(
             name="search",
@@ -174,7 +168,6 @@ async def handle_list_tools() -> list[types.Tool]:
                 )
             ],
         ),
-
         # Migration & Schema Evolution
         types.Tool(
             name="migrate_table",
@@ -285,11 +278,7 @@ async def create_table_handler(db, schema: TableSchema) -> list[types.TextConten
             raise ImportError("LanceDB not available")
 
         # Create LanceDB table
-        table = db.create_table(
-            name=schema.name,
-            schema=model_class,
-            mode="overwrite"
-        )
+        table = db.create_table(name=schema.name, schema=model_class, mode="overwrite")
 
         # Store schema metadata
         searchable_cols = get_searchable_columns(schema)
@@ -310,11 +299,15 @@ async def create_table_handler(db, schema: TableSchema) -> list[types.TextConten
 
         logger.info(f"Created table {schema.name} with {len(schema.columns)} columns")
 
-        searchable_info = f" ({len(searchable_cols)} searchable)" if searchable_cols else ""
-        return [types.TextContent(
-            type="text",
-            text=f"Created table '{schema.name}' with {len(schema.columns)} columns{searchable_info}"
-        )]
+        searchable_info = (
+            f" ({len(searchable_cols)} searchable)" if searchable_cols else ""
+        )
+        return [
+            types.TextContent(
+                type="text",
+                text=f"Created table '{schema.name}' with {len(schema.columns)} columns{searchable_info}",
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to create table: {e}")
@@ -339,24 +332,24 @@ async def list_tables_handler(db) -> list[types.TextContent]:
                 except Exception:
                     pass
 
-                tables_info.append({
-                    "name": table_name,
-                    "row_count": max(0, count - 1),  # Subtract metadata row
-                    "searchable_columns": searchable_count
-                })
+                tables_info.append(
+                    {
+                        "name": table_name,
+                        "row_count": max(0, count - 1),  # Subtract metadata row
+                        "searchable_columns": searchable_count,
+                    }
+                )
             except Exception as e:
-                tables_info.append({
-                    "name": table_name,
-                    "error": str(e)
-                })
+                tables_info.append({"name": table_name, "error": str(e)})
 
-        return [types.TextContent(
-            type="text",
-            text=json.dumps({
-                "tables": tables_info,
-                "total_tables": len(table_names)
-            }, indent=2)
-        )]
+        return [
+            types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {"tables": tables_info, "total_tables": len(table_names)}, indent=2
+                ),
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to list tables: {e}")
@@ -374,17 +367,26 @@ async def describe_table_handler(db, table_name: str) -> list[types.TextContent]
         if not metadata:
             # Fallback for tables without metadata
             df = table.to_pandas()
-            user_data = df[df["table_metadata"].isna()] if "table_metadata" in df.columns else df
+            user_data = (
+                df[df["table_metadata"].isna()]
+                if "table_metadata" in df.columns
+                else df
+            )
 
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "name": table_name,
-                    "row_count": len(user_data),
-                    "columns": list(df.columns),
-                    "error": "No schema metadata found - this table may have been created with an older version"
-                }, indent=2)
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "name": table_name,
+                            "row_count": len(user_data),
+                            "columns": list(df.columns),
+                            "error": "No schema metadata found - this table may have been created with an older version",
+                        },
+                        indent=2,
+                    ),
+                )
+            ]
 
         # Parse schema from metadata
         schema = TableSchema.model_validate(metadata["schema"])
@@ -403,30 +405,30 @@ async def describe_table_handler(db, table_name: str) -> list[types.TextContent]
             searchable_columns=searchable_columns,
             embedding_model=schema.embedding_model,
             created_at=metadata.get("created_at"),
-            description=schema.description
+            description=schema.description,
         )
 
-        logger.info(f"Described table {table_name}: {len(schema.columns)} columns, {row_count} rows")
+        logger.info(
+            f"Described table {table_name}: {len(schema.columns)} columns, {row_count} rows"
+        )
 
-        return [types.TextContent(
-            type="text",
-            text=table_info.model_dump_json(indent=2)
-        )]
+        return [
+            types.TextContent(type="text", text=table_info.model_dump_json(indent=2))
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to describe table: {e}")
+
 
 async def drop_table_handler(db, table_name: str) -> list[types.TextContent]:
     """Drop a table permanently."""
     try:
         db.drop_table(table_name)
         logger.info(f"Dropped table {table_name}")
-        return [types.TextContent(
-            type="text",
-            text=f"Dropped table '{table_name}'"
-        )]
+        return [types.TextContent(type="text", text=f"Dropped table '{table_name}'")]
     except Exception as e:
         raise Exception(f"Failed to drop table: {e}")
+
 
 async def insert_handler(db, data: InsertData) -> list[types.TextContent]:
     """Insert data with automatic embedding generation."""
@@ -466,14 +468,21 @@ async def insert_handler(db, data: InsertData) -> list[types.TextContent]:
 
         logger.info(f"Inserted row into table {data.table_name}")
 
-        embedding_info = f" (with {len(searchable_columns)} embeddings)" if searchable_columns else ""
-        return [types.TextContent(
-            type="text",
-            text=f"Inserted 1 row into table '{data.table_name}'{embedding_info}"
-        )]
+        embedding_info = (
+            f" (with {len(searchable_columns)} embeddings)"
+            if searchable_columns
+            else ""
+        )
+        return [
+            types.TextContent(
+                type="text",
+                text=f"Inserted 1 row into table '{data.table_name}'{embedding_info}",
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to insert data: {e}")
+
 
 async def select_handler(db, query: QueryData) -> list[types.TextContent]:
     """Query data from table."""
@@ -502,7 +511,11 @@ async def select_handler(db, query: QueryData) -> list[types.TextContent]:
             df = df[available_cols]
         else:
             # Exclude embedding vectors from default output for readability
-            display_cols = [col for col in df.columns if not col.endswith("_vector") and col != "table_metadata"]
+            display_cols = [
+                col
+                for col in df.columns
+                if not col.endswith("_vector") and col != "table_metadata"
+            ]
             df = df[display_cols]
 
         # Apply ordering
@@ -518,17 +531,23 @@ async def select_handler(db, query: QueryData) -> list[types.TextContent]:
 
         logger.info(f"Selected {len(results)} rows from table {query.table_name}")
 
-        return [types.TextContent(
-            type="text",
-            text=json.dumps({
-                "table": query.table_name,
-                "results": results,
-                "row_count": len(results)
-            }, indent=2)
-        )]
+        return [
+            types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "table": query.table_name,
+                        "results": results,
+                        "row_count": len(results),
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to select data: {e}")
+
 
 async def update_handler(db, data: UpdateData) -> list[types.TextContent]:
     """Update data with automatic embedding updates."""
@@ -557,15 +576,19 @@ async def update_handler(db, data: UpdateData) -> list[types.TextContent]:
                     df = df[df[column] == value]
 
             if df.empty:
-                return [types.TextContent(
-                    type="text",
-                    text=f"No rows matched the WHERE conditions in table '{data.table_name}'"
-                )]
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"No rows matched the WHERE conditions in table '{data.table_name}'",
+                    )
+                ]
         else:
-            return [types.TextContent(
-                type="text",
-                text="WHERE conditions are required for UPDATE operations"
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text="WHERE conditions are required for UPDATE operations",
+                )
+            ]
 
         # Prepare updates with embedding regeneration
         updated_data = dict(data.data)
@@ -601,24 +624,29 @@ async def update_handler(db, data: UpdateData) -> list[types.TextContent]:
                     full_df.at[index, col] = value
 
         # Recreate table with updated data
-        table = db.create_table(
-            name=data.table_name,
-            data=full_df,
-            mode="overwrite"
-        )
+        table = db.create_table(name=data.table_name, data=full_df, mode="overwrite")
 
         logger.info(f"Updated {update_count} rows in table {data.table_name}")
 
-        embedding_info = f" (with {len([c for c in searchable_columns if c in data.data])} embedding updates)" if searchable_columns else ""
-        return [types.TextContent(
-            type="text",
-            text=f"Updated {update_count} rows in table '{data.table_name}'{embedding_info}"
-        )]
+        embedding_info = (
+            f" (with {len([c for c in searchable_columns if c in data.data])} embedding updates)"
+            if searchable_columns
+            else ""
+        )
+        return [
+            types.TextContent(
+                type="text",
+                text=f"Updated {update_count} rows in table '{data.table_name}'{embedding_info}",
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to update data: {e}")
 
-async def delete_handler(db, table_name: str, where: dict[str, Any]) -> list[types.TextContent]:
+
+async def delete_handler(
+    db, table_name: str, where: dict[str, Any]
+) -> list[types.TextContent]:
     """Delete rows based on conditions."""
     try:
         # Open the table
@@ -633,10 +661,12 @@ async def delete_handler(db, table_name: str, where: dict[str, Any]) -> list[typ
 
         # Apply WHERE conditions to find rows to delete
         if not where:
-            return [types.TextContent(
-                type="text",
-                text="WHERE conditions are required for DELETE operations"
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text="WHERE conditions are required for DELETE operations",
+                )
+            ]
 
         original_count = len(user_data)
         rows_to_keep = user_data.copy()
@@ -649,30 +679,31 @@ async def delete_handler(db, table_name: str, where: dict[str, Any]) -> list[typ
         deleted_count = original_count - len(rows_to_keep)
 
         if deleted_count == 0:
-            return [types.TextContent(
-                type="text",
-                text=f"No rows matched the DELETE conditions in table '{table_name}'"
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"No rows matched the DELETE conditions in table '{table_name}'",
+                )
+            ]
 
         # Combine remaining user data with metadata
         final_data = pd.concat([rows_to_keep, metadata_data], ignore_index=True)
 
         # Recreate table with remaining data
-        table = db.create_table(
-            name=table_name,
-            data=final_data,
-            mode="overwrite"
-        )
+        table = db.create_table(name=table_name, data=final_data, mode="overwrite")
 
         logger.info(f"Deleted {deleted_count} rows from table {table_name}")
 
-        return [types.TextContent(
-            type="text",
-            text=f"Deleted {deleted_count} rows from table '{table_name}'"
-        )]
+        return [
+            types.TextContent(
+                type="text",
+                text=f"Deleted {deleted_count} rows from table '{table_name}'",
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to delete data: {e}")
+
 
 async def search_handler(db, query: SearchQuery) -> list[types.TextContent]:
     """Semantic search across searchable columns."""
@@ -689,10 +720,12 @@ async def search_handler(db, query: SearchQuery) -> list[types.TextContent]:
         searchable_columns = metadata.get("searchable_columns", [])
 
         if not searchable_columns:
-            return [types.TextContent(
-                type="text",
-                text=f"No searchable columns found in table '{query.table_name}'. Add searchable=True to text columns when creating the table."
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"No searchable columns found in table '{query.table_name}'. Add searchable=True to text columns when creating the table.",
+                )
+            ]
 
         # Generate query embedding
         config = get_embedding_config(schema.embedding_model)
@@ -705,19 +738,22 @@ async def search_handler(db, query: SearchQuery) -> list[types.TextContent]:
             vector_col = f"{col_name}_vector"
             try:
                 # Search using the embedding vector for this column
-                search_results = (
-                    table.search(query_embedding, vector_column_name=vector_col)
-                    .limit(query.limit)
-                )
+                search_results = table.search(
+                    query_embedding, vector_column_name=vector_col
+                ).limit(query.limit)
 
                 # Apply additional filters if provided
                 if query.where:
                     for filter_col, filter_val in query.where.items():
-                        search_results = search_results.where(f"{filter_col} = '{filter_val}'")
+                        search_results = search_results.where(
+                            f"{filter_col} = '{filter_val}'"
+                        )
 
                 # Apply similarity threshold if provided
                 if query.threshold:
-                    search_results = search_results.where(f"_distance <= {1.0 - query.threshold}")
+                    search_results = search_results.where(
+                        f"_distance <= {1.0 - query.threshold}"
+                    )
 
                 # Exclude metadata rows
                 search_results = search_results.where("table_metadata IS NULL")
@@ -732,13 +768,18 @@ async def search_handler(db, query: SearchQuery) -> list[types.TextContent]:
 
                         # Clean up the result
                         if "_distance" in result_dict:
-                            result_dict["similarity_score"] = 1.0 - float(result_dict["_distance"])
+                            result_dict["similarity_score"] = 1.0 - float(
+                                result_dict["_distance"]
+                            )
                             result_dict["distance"] = float(result_dict["_distance"])
                             del result_dict["_distance"]
 
                         # Remove vector columns from display
-                        result_dict = {k: v for k, v in result_dict.items()
-                                     if not k.endswith("_vector") and k != "table_metadata"}
+                        result_dict = {
+                            k: v
+                            for k, v in result_dict.items()
+                            if not k.endswith("_vector") and k != "table_metadata"
+                        }
 
                         result_dict["_matched_column"] = col_name
                         all_results.append(result_dict)
@@ -749,42 +790,60 @@ async def search_handler(db, query: SearchQuery) -> list[types.TextContent]:
 
         # Sort by similarity score and limit results
         all_results.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
-        all_results = all_results[:query.limit]
+        all_results = all_results[: query.limit]
 
         # Select specific columns if requested
         if query.columns:
             filtered_results = []
             for result in all_results:
-                filtered_result = {col: result.get(col) for col in query.columns if col in result}
-                filtered_result.update({
-                    k: v for k, v in result.items()
-                    if k in ["similarity_score", "distance", "_matched_column"]
-                })
+                filtered_result = {
+                    col: result.get(col) for col in query.columns if col in result
+                }
+                filtered_result.update(
+                    {
+                        k: v
+                        for k, v in result.items()
+                        if k in ["similarity_score", "distance", "_matched_column"]
+                    }
+                )
                 filtered_results.append(filtered_result)
             all_results = filtered_results
 
-        logger.info(f"Semantic search in table {query.table_name} returned {len(all_results)} results")
+        logger.info(
+            f"Semantic search in table {query.table_name} returned {len(all_results)} results"
+        )
 
-        return [types.TextContent(
-            type="text",
-            text=json.dumps({
-                "query": query.query,
-                "table": query.table_name,
-                "results": all_results,
-                "result_count": len(all_results),
-                "searchable_columns": searchable_columns
-            }, indent=2)
-        )]
+        return [
+            types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "query": query.query,
+                        "table": query.table_name,
+                        "results": all_results,
+                        "result_count": len(all_results),
+                        "searchable_columns": searchable_columns,
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
     except Exception as e:
         raise Exception(f"Failed to perform semantic search: {e}")
 
-async def migrate_table_handler(db, migration: MigrationPlan) -> list[types.TextContent]:
+
+async def migrate_table_handler(
+    db, migration: MigrationPlan
+) -> list[types.TextContent]:
     """Safely migrate table to new schema."""
     try:
         source_table_name = migration.source_table
         target_schema = migration.target_schema
-        backup_name = migration.backup_name or f"{source_table_name}_backup_{int(datetime.now().timestamp())}"
+        backup_name = (
+            migration.backup_name
+            or f"{source_table_name}_backup_{int(datetime.now().timestamp())}"
+        )
 
         # Step 1: Validate source table exists
         if source_table_name not in db.table_names():
@@ -801,11 +860,7 @@ async def migrate_table_handler(db, migration: MigrationPlan) -> list[types.Text
 
         # Step 3: Create backup table
         logger.info(f"Creating backup table: {backup_name}")
-        db.create_table(
-            name=backup_name,
-            data=source_df,
-            mode="create"
-        )
+        db.create_table(name=backup_name, data=source_df, mode="create")
 
         # Step 4: Validate new schema and prepare transformation
         new_searchable_columns = get_searchable_columns(target_schema)
@@ -891,16 +946,16 @@ async def migrate_table_handler(db, migration: MigrationPlan) -> list[types.Text
                         row[f"{col_name}_vector"] = embedding
 
         # Create the target table
-        target_model = create_table_model(target_schema, config.dimension if new_searchable_columns else 1024)
+        target_model = create_table_model(
+            target_schema, config.dimension if new_searchable_columns else 1024
+        )
 
         if target_model is dict:
             raise ImportError("LanceDB not available")
 
         # Create new table with transformed data
         new_table = db.create_table(
-            name=target_schema.name,
-            schema=target_model,
-            mode="overwrite"
+            name=target_schema.name, schema=target_model, mode="overwrite"
         )
 
         # Add metadata row
@@ -910,7 +965,7 @@ async def migrate_table_handler(db, migration: MigrationPlan) -> list[types.Text
             "embedding_model": target_schema.embedding_model,
             "created_at": datetime.now().isoformat(),
             "migrated_from": source_table_name,
-            "backup_table": backup_name
+            "backup_table": backup_name,
         }
 
         if transformed_data:
@@ -936,20 +991,27 @@ async def migrate_table_handler(db, migration: MigrationPlan) -> list[types.Text
             db.drop_table(source_table_name)
             logger.info(f"Dropped original table: {source_table_name}")
 
-        logger.info(f"Migration completed successfully: {source_table_name} -> {target_schema.name}")
+        logger.info(
+            f"Migration completed successfully: {source_table_name} -> {target_schema.name}"
+        )
 
-        return [types.TextContent(
-            type="text",
-            text=json.dumps({
-                "status": "success",
-                "source_table": source_table_name,
-                "target_table": target_schema.name,
-                "backup_table": backup_name,
-                "rows_migrated": len(transformed_data),
-                "new_searchable_columns": new_searchable_columns,
-                "embedding_model": target_schema.embedding_model
-            }, indent=2)
-        )]
+        return [
+            types.TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "status": "success",
+                        "source_table": source_table_name,
+                        "target_table": target_schema.name,
+                        "backup_table": backup_name,
+                        "rows_migrated": len(transformed_data),
+                        "new_searchable_columns": new_searchable_columns,
+                        "embedding_model": target_schema.embedding_model,
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
     except Exception as e:
         logger.error(f"Migration failed: {e}")
@@ -960,8 +1022,6 @@ async def migrate_table_handler(db, migration: MigrationPlan) -> list[types.Text
         except Exception:
             pass
         raise Exception(f"Failed to migrate table: {e}")
-
-
 
 
 async def run():

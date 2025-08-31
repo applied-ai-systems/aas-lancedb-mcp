@@ -46,10 +46,7 @@ def test_table_schema():
 
 def test_insert_data():
     """Test InsertData model."""
-    data = InsertData(
-        table_name="products",
-        data={"title": "Widget", "price": 9.99}
-    )
+    data = InsertData(table_name="products", data={"title": "Widget", "price": 9.99})
     assert data.table_name == "products"
     assert data.data["title"] == "Widget"
     assert data.data["price"] == 9.99
@@ -57,11 +54,7 @@ def test_insert_data():
 
 def test_query_data():
     """Test QueryData model."""
-    query = QueryData(
-        table_name="products",
-        where={"price": 9.99},
-        limit=5
-    )
+    query = QueryData(table_name="products", where={"price": 9.99}, limit=5)
     assert query.table_name == "products"
     assert query.where["price"] == 9.99
     assert query.limit == 5
@@ -79,10 +72,7 @@ def test_table_info():
     """Test TableInfo model."""
     columns = [ColumnSchema(name="title", type="text", searchable=True)]
     info = TableInfo(
-        name="products",
-        row_count=100,
-        columns=columns,
-        searchable_columns=["title"]
+        name="products", row_count=100, columns=columns, searchable_columns=["title"]
     )
     assert info.name == "products"
     assert info.row_count == 100
