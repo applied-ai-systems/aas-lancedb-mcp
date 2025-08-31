@@ -61,16 +61,12 @@ class TextData(BaseModel):
 class SearchQuery(BaseModel):
     """Search query for finding similar vectors."""
 
-    text: str | None = Field(
-        default=None, description="Text query to embed and search"
-    )
+    text: str | None = Field(default=None, description="Text query to embed and search")
     vector: list[float] | None = Field(
         default=None, description="Pre-computed query vector"
     )
     limit: int = Field(default=10, gt=0, description="Maximum number of results")
-    filter_expr: str | None = Field(
-        default=None, description="SQL filter expression"
-    )
+    filter_expr: str | None = Field(default=None, description="SQL filter expression")
     source_filter: str | None = Field(default=None, description="Filter by source")
     threshold: float | None = Field(default=None, description="Similarity threshold")
 
