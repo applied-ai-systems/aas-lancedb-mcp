@@ -116,7 +116,7 @@ jobs:
 
       - name: Check distribution
         run: |
-          uv run python -m pip install twine
+          uv add --dev twine
           uv run twine check dist/*
 
       - name: Upload distribution artifacts
